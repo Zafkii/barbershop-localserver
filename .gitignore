@@ -1,0 +1,27 @@
+# Database
+barbershop.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Build artifacts
+tmp/
+*.exe
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local config
+.env
+.env.local
