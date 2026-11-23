@@ -1,4 +1,4 @@
-.PHONY: dev build run tidy fmt vet clean seed
+.PHONY: dev build run tidy fmt vet clean
 
 DB_PATH ?= ./barbershop.db
 PORT ?= 8080
@@ -11,9 +11,6 @@ build: ## Build the local server binary
 
 run: build ## Build and run (DB at ./barbershop.db)
 	BARBERHOP_DB=$(DB_PATH) PORT=$(PORT) ./bin/localserver
-
-seed: ## Create initial admin user (interactive)
-	go run cmd/seed/main.go $(DB_PATH)
 
 tidy: ## Sync go.mod and go.sum
 	go mod tidy
