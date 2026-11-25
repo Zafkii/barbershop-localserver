@@ -1,7 +1,11 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
+	"time"
+
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -67,6 +71,14 @@ func Migrate(database *sql.DB) error {
 			username TEXT NOT NULL UNIQUE,
 			password_hash TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS session (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id INTEGER NOT NULL,
+			token TEXT NOT NULL UNIQUE,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			FOREIGN KEY (admin_id) REFERENCES admin(id)
+		)`,
 	}
 
 	for _, stmt := range statements {
@@ -121,4 +133,82 @@ func CreateAdmin(database *sql.DB, username, password string) (int, error) {
 		return 0, err
 	}
 	return int(id), nil
+}
+
+// generateToken creates a random hex token.
+func generateToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// CreateSession creates a new session for an admin.
+// The session expires after 7 days.
+func CreateSession(database *sql.DB, adminID int) (string, error) {
+	token, err := generateToken()
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC()
+	expiresAt := now.Add(7 * 24 * time.Hour)
+
+	_, err = database.Exec(
+		"INSERT INTO session (admin_id, token, expires_at, created_at) VALUES (?, ?, ?, ?)",
+		adminID, token, expiresAt.Format(time.RFC3339), now.Format(time.RFC3339),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+// VerifySession checks if a token is valid and not expired.
+// Returns the admin ID if valid, 0 if invalid/expired.
+func VerifySession(database *sql.DB, token string) (int, error) {
+	var adminID int
+	var expiresAt string
+	err := database.QueryRow(
+		"SELECT admin_id, expires_at FROM session WHERE token = ?",
+		token,
+	).Scan(&adminID, &expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	expiry, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil {
+		return 0, err
+	}
+
+	if time.Now().UTC().After(expiry) {
+		// Expired - delete
+		database.Exec("DELETE FROM session WHERE token = ?", token)
+		return 0, nil
+	}
+
+	return adminID, nil
+}
+
+// RefreshSession extends the session expiry by 7 days from now.
+func RefreshSession(database *sql.DB, token string) error {
+	now := time.Now().UTC()
+	expiresAt := now.Add(7 * 24 * time.Hour)
+	_, err := database.Exec(
+		"UPDATE session SET expires_at = ? WHERE token = ?",
+		expiresAt.Format(time.RFC3339), token,
+	)
+	return err
+}
+
+// DeleteSession removes a session (logout).
+func DeleteSession(database *sql.DB, token string) error {
+	_, err := database.Exec("DELETE FROM session WHERE token = ?", token)
+	return err
 }

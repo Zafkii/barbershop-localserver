@@ -44,3 +44,12 @@ type Admin struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"-"` // never serialized
 }
+
+// Session represents an authenticated session.
+type Session struct {
+	ID        int    `json:"id"`
+	AdminID   int    `json:"admin_id"`
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+	CreatedAt string `json:"created_at"`
+}
